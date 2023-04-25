@@ -75,7 +75,7 @@ async fn batch_request() -> Result<String, String> {
     let http = ICHttp::new(URL, None).map_err(|e| format!("init ICHttp failed: {}", e))?;
     let w3 = Web3::new(ic_web3::transports::Batch::new(http));
 
-    let block_number: ic_web3::helpers::CallFuture<U64, _> = w3.eth().block_number();
+    let block_number = w3.eth().block_number();
     let gas_price = w3.eth().gas_price();
     let balance = w3.eth().balance(Address::from([0u8; 20]), None);
     let result = w3.transport().submit_batch().await.map_err(|e| format!("batch request err: {}", e))?;
@@ -163,3 +163,5 @@ async fn rpc_call(body: String) -> Result<String, String> {
 
     Ok(format!("{}", res))
 }
+
+

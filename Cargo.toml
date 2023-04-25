@@ -1,4 +1,5 @@
 [workspace]
 members = [
     "src/multichain_backend",
+    "src/polygon_backend"
 ]

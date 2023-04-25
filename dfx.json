@@ -1,8 +1,13 @@
 {
   "canisters": {
     "multichain_backend": {
-      "candid": "src/multichain_backend/multichain_backend.did",
+      "candid": "src/ethereum/multichain_backend/multichain_backend.did",
       "package": "multichain_backend",
+      "type": "rust"
+    },
+    "polygon_backend": {
+      "candid": "src/polygon_backend/polygon_backend.did",
+      "package": "polygon_backend",
       "type": "rust"
     },
     "multichain_frontend": {
