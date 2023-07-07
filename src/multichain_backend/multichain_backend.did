@@ -16,4 +16,6 @@ service : {
   rpc_call : (text) -> (Result);
   send_eth : (text, nat64) -> (Result);
   send_token : (text, text, nat64) -> (Result);
+  token_balance : (text, text) -> (Result);
+  lastestBlock : () -> (nat) query;
 }

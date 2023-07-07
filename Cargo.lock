@@ -1021,6 +1021,7 @@ dependencies = [
  "hex",
  "ic-cdk 0.6.10",
  "ic-cdk-macros",
+ "ic-cdk-timers",
  "ic-web3",
  "rlp",
  "secp256k1 0.25.0",
