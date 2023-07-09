@@ -29,11 +29,11 @@ const CHAIN_ID: u64 = 11155111;
 const KEY_NAME: &str = "dfx_test_key";
 const URL_POLYGON : &str = "https://polygon-mumbai.g.alchemy.com/v2/XcG0U49rmR40kygsOE2Z2MrqtZxXYjGS";
 
-const TOKEN_ABI: &[u8] = include_bytes!("../res/token.json");
+const TOKEN_ABI: &[u8] = include_bytes!("../../res/token.json");
 
 // static LASTESET_BLOCK_READ: AtomicU64 = AtomicU64::new(1);
 thread_local! {
-    static LASTESET_BLOCK_READ: RefCell<Nat> = RefCell::new(Nat::from(37481105));
+    static LASTESET_BLOCK_READ: RefCell<Nat> = RefCell::new(Nat::from(3838950));
 }
 
 
@@ -101,7 +101,7 @@ fn lastestBlock() -> Nat {
     LASTESET_BLOCK_READ.with(|block| (*block.borrow()).clone())
 }
 async fn main_task() -> Result<String, String> {
-    ic_cdk::print("main_task");
+    ic_cdk::print("eth main_task");
 
     // let body = "{\"jsonrpc\": \"2.0\",\"method\": \"eth_getLogs\",\"params\": [{\"fromBlock\": \"earliest\",\"toBlock\": \"latest\",\"address\":\"0xe7399b79838acc8caaa567fF84e5EFd0d11BB010\",\"topics\":[\"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef\"]}],\"id\": 1}";
     let body: &str = "{\"jsonrpc\": \"2.0\",\"method\": \"eth_getLogs\",\"params\": [{\"fromBlock\": \"earliest\",\"toBlock\": \"latest\",\"address\":\"0xb3f78650c09637152f280f0b17e259B432527b95\",\"topics\":[\"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef\"]}],\"id\": 1}";
@@ -121,36 +121,41 @@ async fn main_task() -> Result<String, String> {
     let withoutPrefixBloackNumberInHex = blockNumberInHex.trim_start_matches("0x");
     let lastestBlack  = u64::from_str_radix(withoutPrefixBloackNumberInHex, 16).unwrap(); 
     let hex_value = &logResponse[lastIndex].data;
-    let value: u64 = u64::from_str_radix(&hex_value[2..], 16).unwrap();
+    let value: U256 = U256::from_str_radix(&hex_value[2..], 16).unwrap();
     let latestBLockNumber = LASTESET_BLOCK_READ.with(|block| (*block.borrow()).clone());
     ic_cdk::println!("lastestBlack: {}", lastestBlack);
     ic_cdk::println!("latestBLockNumber of application state: {}", latestBLockNumber);
-
+    ic_cdk::println!(" boolean: {}", Nat::from(lastestBlack) > latestBLockNumber);
+    if(Nat::from(lastestBlack)<latestBLockNumber){
+        ic_cdk::println!("eth no new block");
+        return Ok("no new block".to_string());
+    }
+    let lastest_tx_hash=&logResponse[lastIndex].transaction_hash; 
+    let tx_body: &str = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionByHash\",\"params\": [\"#\"],\"id\":1}";
+    let getTransactionBody =tx_body.replace("#", &*lastest_tx_hash);
+    ic_cdk::println!("Eth getTransactionBody: {}", getTransactionBody);
+    let getTransactionRes = w3.json_rpc_call(&getTransactionBody).await.map_err(|e| format!(" failed in transaction history{}", e))?;
+    let transaction: Transaction = serde_json::from_str(&getTransactionRes).unwrap();
+    let methodId = &transaction.input[0..11];
+    let adminMethodId = "0x0d271720";
+    ic_cdk::println!("Eth transaction: {}", getTransactionRes);
+    if(methodId==adminMethodId){
+        ic_cdk::println!(" eth adminMethodId: {}", adminMethodId);
+        return Ok("This is the admin function".to_string());
+    }
     if (Nat::from(lastestBlack) > latestBLockNumber ){
 
         LASTESET_BLOCK_READ.with(|v| *v.borrow_mut() = Nat::from(lastestBlack));
-        let lastest_tx_hash=&logResponse[lastIndex].transaction_hash; 
-        let tx_body: &str = "{{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionByHash\",\"params\": [\"#\"],\"id\":1}}";
-        let getTransactionBody =tx_body.replace("#", &*lastest_tx_hash);
-        let getTransactionRes = w3.json_rpc_call(&getTransactionBody).await.map_err(|e| format!("{}", e))?;
-        let transaction: Transaction = serde_json::from_str(&getTransactionRes).unwrap();
-        let methodId = &transaction.input[0..11];
-        let adminMethodId = "0x0d271720";
-        ic_cdk::println!("transaction: {}", getTransactionRes);
-        if(methodId==adminMethodId){
-            ic_cdk::println!("adminMethodId: {}", adminMethodId);
-            Ok("This is the admin function".to_string())
-        }
-        else{
+        
         let latestBlock: &EventResult = &logResponse[lastIndex];
-        ic_cdk::println!("new block found");
+        ic_cdk::println!("eth new block found");
          // ecdsa key info
         let derivation_path = vec![ic_cdk::id().as_slice().to_vec()];
         let key_info = KeyInfo{ derivation_path: derivation_path, key_name: KEY_NAME.to_string(), ecdsa_sign_cycles: None };
         //from address
         let raw_from = &latestBlock.topics[1];
         let from = Address::from_str(&get_address_from_topic(&raw_from)).unwrap();
-        ic_cdk::println!("from----------------------------: {}", from);
+        ic_cdk::println!("eth from----------------------------: {}", from);
         let w3 = match ICHttp::new(URL, None) {
             Ok(v) => { Web3::new(v) },
             Err(e) => { return Err(e.to_string()) },
@@ -185,12 +190,12 @@ async fn main_task() -> Result<String, String> {
             .signed_call("transferFromAdmin", (from,to_addr, value,), options, hex::encode(canister_addr), key_info, CHAIN_ID)
             .await
             .map_err(|e| format!("token transfer failed: {}", e))?;
-        ic_cdk::println!("txhash: {}", hex::encode(txhash));
+        ic_cdk::println!("eth txhash: {}", hex::encode(txhash));
         Ok(hex::encode(txhash))
-    }
+    
 }
 else{
-        ic_cdk::println!("no new block");
+        ic_cdk::println!("eth no new block");
         Ok("no new block".to_string())
 }
 }

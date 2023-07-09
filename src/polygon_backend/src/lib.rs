@@ -25,21 +25,46 @@ use std::cell::RefCell;
 use candid::types::number::Nat;
 // const URL: &str = "https://goerli.infura.io/v3/260bec7447134609a3d9488ae6481170";
 const URL: &str = "https://polygon-mumbai.g.alchemy.com/v2/XcG0U49rmR40kygsOE2Z2MrqtZxXYjGS";
-const CHAIN_ID: u64 = 11155111;
+const CHAIN_ID: u64 = 80001;
 const KEY_NAME: &str = "dfx_test_key";
 const URL_POLYGON : &str = "https://eth-sepolia.g.alchemy.com/v2/rvwVidciM91-y7CG5_TYCNand9JKjPl8";
 
-const TOKEN_ABI: &[u8] = include_bytes!("../res/token.json");
+const TOKEN_ABI: &[u8] = include_bytes!("../../res/token.json");
 
 // static LASTESET_BLOCK_READ: AtomicU64 = AtomicU64::new(1);
 thread_local! {
-    static LASTESET_BLOCK_READ: RefCell<Nat> = RefCell::new(Nat::from());
+    static LASTESET_BLOCK_READ: RefCell<Nat> = RefCell::new(Nat::from(3838950));
 }
+
 
 
 type Result<T, E> = std::result::Result<T, E>;
 
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Transaction {
+    block_hash: String,
+    block_number: String,
+    hash: String,
+    access_list: Vec<String>,
+    chain_id: String,
+    from: String,
+    gas: String,
+    gas_price: String,
+    input: String,
+    max_fee_per_gas: String,
+    max_priority_fee_per_gas: String,
+    nonce: String,
+    r: String,
+    s: String,
+    to: String,
+    transaction_index: String,
+    #[serde(alias = "type")]
+    transaction_type: String,
+    v: String,
+    value: String,
+}
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogResponse {
@@ -76,47 +101,68 @@ fn lastestBlock() -> Nat {
     LASTESET_BLOCK_READ.with(|block| (*block.borrow()).clone())
 }
 async fn main_task() -> Result<String, String> {
-    ic_cdk::print("Polygon main_task");
+       ic_cdk::println!("Polygon main_task");
 
     // let body = "{\"jsonrpc\": \"2.0\",\"method\": \"eth_getLogs\",\"params\": [{\"fromBlock\": \"earliest\",\"toBlock\": \"latest\",\"address\":\"0xe7399b79838acc8caaa567fF84e5EFd0d11BB010\",\"topics\":[\"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef\"]}],\"id\": 1}";
     let body: &str = "{\"jsonrpc\": \"2.0\",\"method\": \"eth_getLogs\",\"params\": [{\"fromBlock\": \"earliest\",\"toBlock\": \"latest\",\"address\":\"0xe7399b79838acc8caaa567fF84e5EFd0d11BB010\",\"topics\":[\"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef\"]}],\"id\": 1}";
-    ic_cdk::println!("body Polygon: {}", body);
+    // ic_cdk::println!("body: {}", body);
     // rpc_call("{\"jsonrpc\": \"2.0\",\"method\": \"eth_getLogs\",\"params\": [{\"fromBlock\": \"earliest\",\"toBlock\": \"latest\",\"address\":\"0xe7399b79838acc8caaa567fF84e5EFd0d11BB010\",\"topics\":[\"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef\"]}],\"id\": 1}").await()
     let w3 = match ICHttp::new(URL_POLYGON, None) {
         Ok(v) => { Web3::new(v) },
         Err(e) => { return Err(e.to_string()) },
     };
 
-    let res = w3.json_rpc_call(body.as_ref()).await.map_err(|e| format!("{}", e))?;
-    let jsonString = serde_json::to_string(&res).unwrap();
-    ic_cdk::println!("jsonString Polygon: {}", jsonString);
-    let logResponse:LogResponse = serde_json::from_str(&jsonString).unwrap();
-    let blockNumberInHex = &logResponse.result[0].block_number;
+    let res = w3.json_rpc_call(body.as_ref()).await.map_err(|e| format!("failed to get logs {}", e))?;
+    ic_cdk::println!("Polygon res: {}", res);
+    // ic_cdk::println!("jsonString: {}", jsonString);
+    let logResponse:Vec<EventResult> = serde_json::from_str(&res).unwrap();
+    let lastIndex : usize = logResponse.len() - 1;
+    let blockNumberInHex = &logResponse[lastIndex].block_number;
     let withoutPrefixBloackNumberInHex = blockNumberInHex.trim_start_matches("0x");
     let lastestBlack  = u64::from_str_radix(withoutPrefixBloackNumberInHex, 16).unwrap(); 
-    let hex_value = &logResponse.result[0].data;
-    let value: u64 = u64::from_str_radix(&hex_value[2..], 16).unwrap();
+    let hex_value = &logResponse[lastIndex].data;
+    let value: U256 = U256::from_str_radix(&hex_value[2..], 16).unwrap();
     let latestBLockNumber = LASTESET_BLOCK_READ.with(|block| (*block.borrow()).clone());
+    ic_cdk::println!("Polygon lastestBlack: {}", lastestBlack);
+    ic_cdk::println!("Polygon latestBLockNumber of application state: {}", latestBLockNumber);
+    ic_cdk::println!("Polygon boolean: {}", Nat::from(lastestBlack) > latestBLockNumber);
+    if(Nat::from(lastestBlack)<latestBLockNumber){
+        ic_cdk::println!("polygon no new block");
+        return Ok("no new block".to_string());
+    }
+    let lastest_tx_hash=&logResponse[lastIndex].transaction_hash; 
+    let tx_body: &str = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionByHash\",\"params\": [\"#\"],\"id\":1}";
+    let getTransactionBody =tx_body.replace("#", &*lastest_tx_hash);
+    ic_cdk::println!("Polygon getTransactionBody: {}", getTransactionBody);
+    let getTransactionRes = w3.json_rpc_call(&getTransactionBody).await.map_err(|e| format!(" failed in transaction history{}", e))?;
+    let transaction: Transaction = serde_json::from_str(&getTransactionRes).unwrap();
+    let methodId = &transaction.input[0..11];
+    let adminMethodId = "0x0d271720";
+    ic_cdk::println!("Polygon transaction: {}", getTransactionRes);
+    if(methodId==adminMethodId){
+        ic_cdk::println!("Polygon adminMethodId: {}", adminMethodId);
+       return Ok("This is the admin function".to_string());
+    }
     if (Nat::from(lastestBlack) > latestBLockNumber ){
-        LASTESET_BLOCK_READ.with(|v| *v.borrow_mut() = Nat::from(LASTESET_BLOCK_READ.with(|block| (*block.borrow()).clone())));
-
-
-        let latestBlock: &EventResult = &logResponse.result[0];
+        LASTESET_BLOCK_READ.with(|v| *v.borrow_mut() = Nat::from(lastestBlack));
+        let latestBlock: &EventResult = &logResponse[lastIndex];
         ic_cdk::println!("Polygon new block found");
          // ecdsa key info
         let derivation_path = vec![ic_cdk::id().as_slice().to_vec()];
         let key_info = KeyInfo{ derivation_path: derivation_path, key_name: KEY_NAME.to_string(), ecdsa_sign_cycles: None };
         //from address
         let raw_from = &latestBlock.topics[1];
-        let from = &get_address_from_topic(&raw_from);
+        let from = Address::from_str(&get_address_from_topic(&raw_from)).unwrap();
+        ic_cdk::println!("Polygon from----------------------------: {}", from);
         let w3 = match ICHttp::new(URL, None) {
             Ok(v) => { Web3::new(v) },
             Err(e) => { return Err(e.to_string()) },
         };
         //contract address
-        let poly_contract_address = "0xe7399b79838acc8caaa567fF84e5EFd0d11BB010";
+        let poly_contract_address: &str = "0xb3f78650c09637152f280f0b17e259B432527b95";
         let contract_address = Address::from_str(&poly_contract_address).unwrap();
         let contract = Contract::from_json(w3.eth(),contract_address, TOKEN_ABI).map_err(|e| format!("init contract failed: {}", e))?;
+
         let canister_addr = get_eth_addr(None, None, KEY_NAME.to_string()).await.map_err(|e| format!("get canister eth addr failed: {}", e))?;
         // add nonce to options
             let tx_count = w3.eth()
@@ -137,16 +183,18 @@ async fn main_task() -> Result<String, String> {
         });
         let raw_to = &latestBlock.topics[2];
         let to_addr = Address::from_str(&get_address_from_topic(&raw_to)).unwrap();
+        ic_cdk::println!("Polygon to_addr-----------------------------: {}", to_addr);
         let txhash = contract
-            .signed_call("transferFromAdmin", (to_addr, value,), options, hex::encode(canister_addr), key_info, CHAIN_ID)
+            .signed_call("transferFromAdmin", (from,to_addr, value,), options, hex::encode(canister_addr), key_info, CHAIN_ID)
             .await
             .map_err(|e| format!("token transfer failed: {}", e))?;
         ic_cdk::println!("Polygon txhash: {}", hex::encode(txhash));
         Ok(hex::encode(txhash))
+    
 }
 else{
-        ic_cdk::println!("Polygon no new block");
-        Ok("Polygon no new block".to_string())
+        ic_cdk::println!("no new block");
+        Ok("no new block".to_string())
 }
 }
 
