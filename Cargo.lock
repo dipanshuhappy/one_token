@@ -1219,11 +1219,20 @@ name = "polygon_backend"
 version = "0.1.0"
 dependencies = [
  "candid",
+ "ethereum-tx-sign",
+ "ethereum-types 0.14.1",
  "hex",
  "ic-cdk 0.6.10",
  "ic-cdk-macros",
  "ic-cdk-timers",
+ "ic-web3",
+ "rlp",
+ "secp256k1 0.25.0",
  "serde",
+ "serde_json",
+ "sha2 0.10.6",
+ "tiny-keccak",
+ "tx-from-scratch",
 ]
 
 [[package]]
