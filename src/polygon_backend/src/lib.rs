@@ -33,7 +33,7 @@ const TOKEN_ABI: &[u8] = include_bytes!("../../res/token.json");
 
 // static LASTESET_BLOCK_READ: AtomicU64 = AtomicU64::new(1);
 thread_local! {
-    static LASTESET_BLOCK_READ: RefCell<Nat> = RefCell::new(Nat::from(3838950));
+    static LASTESET_BLOCK_READ: RefCell<Nat> = RefCell::new(Nat::from(3862865));
 }
 
 
@@ -101,7 +101,7 @@ fn lastestBlock() -> Nat {
     LASTESET_BLOCK_READ.with(|block| (*block.borrow()).clone())
 }
 async fn main_task() -> Result<String, String> {
-       ic_cdk::println!("Polygon main_task");
+    ic_cdk::println!("Polygon main_task");
 
     // let body = "{\"jsonrpc\": \"2.0\",\"method\": \"eth_getLogs\",\"params\": [{\"fromBlock\": \"earliest\",\"toBlock\": \"latest\",\"address\":\"0xe7399b79838acc8caaa567fF84e5EFd0d11BB010\",\"topics\":[\"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef\"]}],\"id\": 1}";
     let body: &str = "{\"jsonrpc\": \"2.0\",\"method\": \"eth_getLogs\",\"params\": [{\"fromBlock\": \"earliest\",\"toBlock\": \"latest\",\"address\":\"0xe7399b79838acc8caaa567fF84e5EFd0d11BB010\",\"topics\":[\"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef\"]}],\"id\": 1}";
@@ -122,6 +122,7 @@ async fn main_task() -> Result<String, String> {
     let lastestBlack  = u64::from_str_radix(withoutPrefixBloackNumberInHex, 16).unwrap(); 
     let hex_value = &logResponse[lastIndex].data;
     let value: U256 = U256::from_str_radix(&hex_value[2..], 16).unwrap();
+    ic_cdk::println!("-----------------------------------value-polygon---------------- :{}",value);
     let latestBLockNumber = LASTESET_BLOCK_READ.with(|block| (*block.borrow()).clone());
     ic_cdk::println!("Polygon lastestBlack: {}", lastestBlack);
     ic_cdk::println!("Polygon latestBLockNumber of application state: {}", latestBLockNumber);
@@ -134,24 +135,25 @@ async fn main_task() -> Result<String, String> {
     let tx_body: &str = "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getTransactionByHash\",\"params\": [\"#\"],\"id\":1}";
     let getTransactionBody =tx_body.replace("#", &*lastest_tx_hash);
     ic_cdk::println!("Polygon getTransactionBody: {}", getTransactionBody);
-    let getTransactionRes = w3.json_rpc_call(&getTransactionBody).await.map_err(|e| format!(" failed in transaction history{}", e))?;
+    let getTransactionRes: String = w3.json_rpc_call(getTransactionBody.as_ref()).await.map_err(|e| format!("failed in transaction history {}", e))?;
     let transaction: Transaction = serde_json::from_str(&getTransactionRes).unwrap();
-    let methodId = &transaction.input[0..11];
+    let methodId = &transaction.input[0..10];
+    ic_cdk::println!("Polygon methodId: {}", methodId);
     let adminMethodId = "0x0d271720";
-    ic_cdk::println!("Polygon transaction: {}", getTransactionRes);
+    ic_cdk::println!("Polygon transaction: {}", &getTransactionRes);
     if(methodId==adminMethodId){
         ic_cdk::println!("Polygon adminMethodId: {}", adminMethodId);
        return Ok("This is the admin function".to_string());
     }
     if (Nat::from(lastestBlack) > latestBLockNumber ){
-        LASTESET_BLOCK_READ.with(|v| *v.borrow_mut() = Nat::from(lastestBlack));
+        
         let latestBlock: &EventResult = &logResponse[lastIndex];
         ic_cdk::println!("Polygon new block found");
          // ecdsa key info
         let derivation_path = vec![ic_cdk::id().as_slice().to_vec()];
         let key_info = KeyInfo{ derivation_path: derivation_path, key_name: KEY_NAME.to_string(), ecdsa_sign_cycles: None };
         //from address
-        let raw_from = &latestBlock.topics[1];
+        let raw_from: &str = &latestBlock.topics[1];
         let from = Address::from_str(&get_address_from_topic(&raw_from)).unwrap();
         ic_cdk::println!("Polygon from----------------------------: {}", from);
         let w3 = match ICHttp::new(URL, None) {
@@ -165,7 +167,7 @@ async fn main_task() -> Result<String, String> {
 
         let canister_addr = get_eth_addr(None, None, KEY_NAME.to_string()).await.map_err(|e| format!("get canister eth addr failed: {}", e))?;
         // add nonce to options
-            let tx_count = w3.eth()
+        let tx_count = w3.eth()
                 .transaction_count(canister_addr, None)
                 .await
                 .map_err(|e| format!("get tx count error: {}", e))?;
@@ -184,6 +186,7 @@ async fn main_task() -> Result<String, String> {
         let raw_to = &latestBlock.topics[2];
         let to_addr = Address::from_str(&get_address_from_topic(&raw_to)).unwrap();
         ic_cdk::println!("Polygon to_addr-----------------------------: {}", to_addr);
+        LASTESET_BLOCK_READ.with(|v| *v.borrow_mut() = Nat::from(lastestBlack));
         let txhash = contract
             .signed_call("transferFromAdmin", (from,to_addr, value,), options, hex::encode(canister_addr), key_info, CHAIN_ID)
             .await
